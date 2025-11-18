@@ -1,0 +1,18 @@
+/// <reference types="vite/client" />
+
+// Определяем типы для Electron API в глобальном объекте window
+interface Window {
+  electron: {
+    getContainerLogs: (containerId: string) => Promise<{ success: boolean; logs?: string; containerId?: string; error?: string }>;
+    createProject: (projectName: string) => Promise<{ success: boolean; containerId?: string; error?: string }>;
+    stopContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
+    startContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
+    removeContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
+    listContainers: () => Promise<{ success: boolean; containers?: any[]; error?: string }>;
+    sendToOllama: (prompt: string) => Promise<any>;
+    createFileInContainer: (containerId: string, filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+    runCommandInContainer: (containerId: string, command: string) => Promise<{ success: boolean; result?: string; error?: string }>;
+    listFilesInContainer: (containerId: string) => Promise<{ success: boolean; files?: string[]; error?: string }>;
+    readFileInContainer: (containerId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
+  };
+}
