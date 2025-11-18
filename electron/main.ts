@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import { 
   createProjectContainer, 
@@ -12,6 +13,17 @@ import {
   readFileInContainer,
   getContainerLogs,
 } from './dockerManager';
+
+
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
+
+app.whenReady().then(() => {
+  createWindow();
+  // Добавлено автообновление
+  autoUpdater.checkForUpdatesAndNotify();
+});
+
 
 let mainWindow: BrowserWindow | null;
 
@@ -62,6 +74,8 @@ app.on('web-contents-created', (event, contents) => {
 
 app.whenReady().then(() => {
   createWindow();
+
+  autoUpdater.checkForUpdates();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -176,4 +190,28 @@ ipcMain.handle('get-container-logs', async (_, containerId) => {
     console.error('Error getting container logs:', error);
     return { success: false, error: error.message || 'Unknown error' };
   }
+});
+
+
+// IPC события для автообновления
+autoUpdater.on('update-available', (info) => {
+  mainWindow?.webContents.send('update-available', info);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  mainWindow?.webContents.send('update-downloaded', info);
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  mainWindow?.webContents.send('update-progress', progress);
+});
+
+autoUpdater.on('error', (error) => {
+  mainWindow?.webContents.send('update-error', error.message);
+});
+
+// IPC handler для установки обновления
+ipcMain.handle('install-update', async () => {
+  autoUpdater.quitAndInstall();
+  return { success: true };
 });

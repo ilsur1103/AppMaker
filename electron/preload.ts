@@ -13,6 +13,12 @@ interface ElectronAPI {
   listFilesInContainer: (containerId: string) => Promise<{ success: boolean; files?: string[]; error?: string }>;
   readFileInContainer: (containerId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
   getContainerLogs: (containerId: string) => Promise<{ success: boolean; logs?: string; error?: string }>; 
+
+  onUpdateAvailable: (callback: (info: any) => void) => void;
+  onUpdateDownloaded: (callback: (info: any) => void) => void;
+  onUpdateProgress: (callback: (progress: any) => void) => void;
+  onUpdateError: (callback: (error: string) => void) => void;
+  installUpdate: () => Promise<{ success: boolean }>;
 }
 
 // Создаем безопасный API для фронтенда
@@ -33,6 +39,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('read-file-in-container', containerId, filePath),
   getContainerLogs: (containerId: string) => 
     ipcRenderer.invoke('get-container-logs', containerId),
+
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_, info) => callback(info)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_, info) => callback(info)),
+  onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (_, progress) => callback(progress)),
+  onUpdateError: (callback) => ipcRenderer.on('update-error', (_, error) => callback(error)),
+  installUpdate: () => ipcRenderer.invoke('install-update')
 };
 
 // Экспортируем API в глобальный объект window

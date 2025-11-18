@@ -1,7 +1,9 @@
 {
-  "name": "my-ai-dev-app",
+  "name": "appmaker",
   "version": "1.0.0",
   "main": "dist-electron/main.js",
+  "description": "create apps fast",
+  "author": "Ilsur Aptukov",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -31,14 +33,22 @@
     "typescript": "^5.0.2",
     "vite": "^4.4.5",
     "vite-plugin-electron": "^0.15.4",
-    "wait-on": "^7.0.1"
+    "wait-on": "^7.0.1",
+    "electron-updater": "^6.1.7"
   },
   "build": {
-    "appId": "com.example.my-ai-dev-app",
+    "appId": "com.example.appmaker",
     "productName": "AI Dev Assistant",
     "directories": {
       "output": "release"
     },
+
+    "publish": {
+      "provider": "github",
+      "owner": "ilsur1103",
+      "repo": "https://github.com/ilsur1103/AppMaker.git"
+    },
+
     "files": [
       "dist/**/*",
       "dist-electron/**/*"

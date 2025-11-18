@@ -14,5 +14,11 @@ interface Window {
     runCommandInContainer: (containerId: string, command: string) => Promise<{ success: boolean; result?: string; error?: string }>;
     listFilesInContainer: (containerId: string) => Promise<{ success: boolean; files?: string[]; error?: string }>;
     readFileInContainer: (containerId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
+
+    onUpdateAvailable: (callback: (info: any) => void) => void;
+    onUpdateDownloaded: (callback: (info: any) => void) => void;
+    onUpdateProgress: (callback: (progress: any) => void) => void;
+    onUpdateError: (callback: (error: string) => void) => void;
+    installUpdate: () => Promise<{ success: boolean }>;
   };
 }

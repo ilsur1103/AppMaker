@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Dashboard from './components/Dashboard';
 import ProjectView from './components/ProjectView';
+import StatusBar from './components/StatusBar';
 
 function App() {
   const [currentProject, setCurrentProject] = useState<string | null>(null);
   const [containerId, setContainerId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
+
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [updateProgress, setUpdateProgress] = useState<any>(null);
+  const [updateDownloaded, setUpdateDownloaded] = useState(false);
 
   const handleProjectSelect = (projectName: string, id: string) => {
     setCurrentProject(projectName);
@@ -17,6 +22,20 @@ function App() {
     setContainerId(null);
     setViewMode('preview');
   };
+
+  useEffect(() => {
+    window.electron.onUpdateAvailable((info) => {
+      setUpdateInfo(info);
+    });
+    
+    window.electron.onUpdateDownloaded(() => {
+      setUpdateDownloaded(true);
+    });
+    
+    window.electron.onUpdateProgress((progress) => {
+      setUpdateProgress(progress);
+    });
+  }, []);
 
   return (
     <div className="app">
@@ -31,6 +50,7 @@ function App() {
       ) : (
         <Dashboard onProjectSelect={handleProjectSelect} />
       )}
+      <StatusBar version={''} updateInfo={updateInfo} updateProgress={updateProgress} updateDownloaded={updateDownloaded} />
     </div>
   );
 }
