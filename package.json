@@ -9,7 +9,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"vite build --watch\" \"wait-on dist/index.html && electron .\"",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-builder build --win --publish never",
+    "electron:publish": "vite build && electron-builder build --win --publish always"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
@@ -46,7 +47,9 @@
     "publish": {
       "provider": "github",
       "owner": "ilsur1103",
-      "repo": "https://github.com/ilsur1103/AppMaker.git"
+      "repo": "https://github.com/ilsur1103/AppMaker.git",
+      "token": "",
+      "private": true
     },
 
     "files": [
