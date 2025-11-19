@@ -1,0 +1,14 @@
+{
+  "name": "ai-dev-project",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo Building..."
+  },
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}

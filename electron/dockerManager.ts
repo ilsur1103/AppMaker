@@ -1,7 +1,17 @@
+// dockerManager.ts
 import Docker from 'dockerode';
-import tar from 'tar-stream';
+import fs from 'fs';
+import path from 'path';
+import { createReadStream, createWriteStream } from 'fs';
+import archiver from 'archiver';
 
 const docker = new Docker();
+const WORKDIR_BASE = path.join(process.cwd(), 'workdirs');
+
+// Создаем базовую директорию для рабочих папок если её нет
+if (!fs.existsSync(WORKDIR_BASE)) {
+  fs.mkdirSync(WORKDIR_BASE, { recursive: true });
+}
 
 export async function createProjectContainer(projectName: string) {
   try {
@@ -77,6 +87,12 @@ export async function createProjectContainer(projectName: string) {
     await container.start();
     console.log('Контейнер успешно запущен');
     
+    // Создаем локальную рабочую директорию для проекта
+    const projectWorkDir = path.join(WORKDIR_BASE, container.id);
+    if (!fs.existsSync(projectWorkDir)) {
+      fs.mkdirSync(projectWorkDir, { recursive: true });
+    }
+    
     // Инициализируем базовый проект (асинхронно, без ожидания)
     initializeProject(container.id).catch(error => {
       console.error('Ошибка при асинхронной инициализации проекта:', error);
@@ -93,7 +109,10 @@ export async function initializeProject(containerId: string) {
   try {
     console.log('Начало инициализации проекта...');
     
-    // Создаем базовую структуру проекта
+    // Создаем базовую структуру проекта локально
+    const projectWorkDir = path.join(WORKDIR_BASE, containerId);
+    
+    // Создаем package.json
     const packageJson = JSON.stringify({
       "name": "ai-dev-project",
       "version": "1.0.0",
@@ -124,9 +143,12 @@ app.listen(port, '0.0.0.0', () => {
 });
 `;
     
-    // Создаем файлы в контейнере
-    await createFileInContainer(containerId, 'package.json', packageJson);
-    await createFileInContainer(containerId, 'server.js', serverJs);
+    // Создаем файлы локально
+    await createFileInWorkDir(containerId, 'package.json', packageJson);
+    await createFileInWorkDir(containerId, 'server.js', serverJs);
+    
+    // Синхронизируем локальную директорию с контейнером
+    await syncWorkDirToContainer(containerId);
     
     // Устанавливаем зависимости
     await runCommandInContainer(containerId, 'npm install');
@@ -225,6 +247,13 @@ export async function removeContainer(containerId: string) {
     console.log(`Удаление контейнера ${containerId}`);
     await container.remove();
     console.log(`Контейнер ${containerId} успешно удален`);
+    
+    // Удаляем локальную рабочую директорию
+    const projectWorkDir = path.join(WORKDIR_BASE, containerId);
+    if (fs.existsSync(projectWorkDir)) {
+      fs.rmSync(projectWorkDir, { recursive: true, force: true });
+      console.log(`Локальная директория ${projectWorkDir} успешно удалена`);
+    }
   } catch (error: any) {
     console.error('Ошибка при удалении контейнера:', error);
     
@@ -233,6 +262,13 @@ export async function removeContainer(containerId: string) {
       const container = docker.getContainer(containerId);
       await container.remove({ force: true });
       console.log(`Контейнер ${containerId} успешно удален (принудительно)`);
+      
+      // Удаляем локальную рабочую директорию
+      const projectWorkDir = path.join(WORKDIR_BASE, containerId);
+      if (fs.existsSync(projectWorkDir)) {
+        fs.rmSync(projectWorkDir, { recursive: true, force: true });
+        console.log(`Локальная директория ${projectWorkDir} успешно удалена`);
+      }
     } catch (forceError) {
       console.error('Ошибка при принудительном удалении контейнера:', forceError);
       throw forceError;
@@ -253,35 +289,111 @@ export async function listContainers() {
   }
 }
 
-export async function createFileInContainer(containerId: string, filePath: string, content: string) {
+// Новый метод для создания файлов в локальной рабочей директории
+export async function createFileInWorkDir(containerId: string, filePath: string, content: string) {
+  try {
+    const projectWorkDir = path.join(WORKDIR_BASE, containerId);
+    const fullFilePath = path.join(projectWorkDir, filePath);
+    
+    // Создаем директории если нужно
+    const dirPath = path.dirname(fullFilePath);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    
+    // Записываем файл
+    fs.writeFileSync(fullFilePath, content, 'utf8');
+    console.log(`Файл ${filePath} успешно создан в локальной директории`);
+    
+  } catch (error) {
+    console.error(`Ошибка при создании файла ${filePath} в локальной директории:`, error);
+    throw error;
+  }
+}
+
+// Обновленный метод syncWorkDirToContainer
+export async function syncWorkDirToContainer(containerId: string) {
   const container = docker.getContainer(containerId);
+  const projectWorkDir = path.join(WORKDIR_BASE, containerId);
   
   try {
-    // Создаем tar архив с файлом
-    const pack = tar.pack();
+    if (!fs.existsSync(projectWorkDir)) {
+      throw new Error(`Локальная директория проекта не найдена: ${projectWorkDir}`);
+    }
     
-    // Добавляем файл в архив
-    pack.entry({ name: filePath }, content);
-    pack.finalize();
+    // Создаем архив из локальной директории
+    const archivePath = path.join(WORKDIR_BASE, `${containerId}_sync.tar`);
     
-    // Копируем архив в контейнер с таймаутом
     return new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Timeout while creating file in container'));
-      }, 10000);
+      const output = fs.createWriteStream(archivePath);
+      const archive = archiver('tar', {
+        zlib: { level: 9 } // Максимальное сжатие
+      });
       
-      container.putArchive(pack, { path: '/app' })
-        .then(() => {
-          clearTimeout(timeout);
-          console.log(`Файл ${filePath} успешно создан в контейнере`);
+      output.on('close', async () => {
+        try {
+          // Читаем архив и копируем в контейнер
+          const archiveStream = fs.createReadStream(archivePath);
+          
+          // putArchive автоматически разархивирует tar-архив в контейнере
+          await container.putArchive(archiveStream, { path: '/app' });
+          
+          // Удаляем временный архив после успешной передачи
+          fs.unlinkSync(archivePath);
+          
+          console.log('Локальная директория успешно синхронизирована с контейнером');
           resolve();
-        })
-        .catch((error) => {
-          clearTimeout(timeout);
-          console.error(`Ошибка при создании файла ${filePath} в контейнере:`, error);
+        } catch (error) {
+          // Удаляем временный архив в случае ошибки
+          if (fs.existsSync(archivePath)) {
+            try {
+              fs.unlinkSync(archivePath);
+            } catch (unlinkError) {
+              console.error('Ошибка при удалении временного архива:', unlinkError);
+            }
+          }
+          console.error('Ошибка при копировании архива в контейнер:', error);
           reject(error);
-        });
+        }
+      });
+      
+      archive.on('error', (err) => {
+        console.error('Ошибка при создании архива:', err);
+        // Удаляем временный архив в случае ошибки создания
+        if (fs.existsSync(archivePath)) {
+          try {
+            fs.unlinkSync(archivePath);
+          } catch (unlinkError) {
+            console.error('Ошибка при удалении временного архива:', unlinkError);
+          }
+        }
+        reject(err);
+      });
+      
+      archive.pipe(output);
+      
+      // Добавляем все файлы из рабочей директории
+      archive.directory(projectWorkDir, false);
+      
+      archive.finalize();
     });
+    
+  } catch (error) {
+    console.error('Ошибка при синхронизации локальной директории с контейнером:', error);
+    throw error;
+  }
+}
+
+// Обновленный метод для создания файлов (использует локальную директорию)
+export async function createFileInContainer(containerId: string, filePath: string, content: string) {
+  try {
+    // Создаем файл в локальной директории
+    await createFileInWorkDir(containerId, filePath, content);
+    
+    // Синхронизируем локальную директорию с контейнером
+    await syncWorkDirToContainer(containerId);
+    
+    console.log(`Файл ${filePath} успешно создан и синхронизирован с контейнером`);
   } catch (error) {
     console.error(`Ошибка при создании файла ${filePath} в контейнере:`, error);
     throw error;

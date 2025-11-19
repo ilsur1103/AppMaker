@@ -1,3 +1,4 @@
+// Dashboard.tsx
 import React, { useState, useEffect } from 'react';
 
 interface Project {
@@ -69,7 +70,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       alert(`Failed to create project: ${errorMessage}`);
     } finally {
       setLoading(false);
-      setNewProjectName('');
+      setNewProjectName(''); // Очищаем поле ввода после создания
     }
   };
 
@@ -115,11 +116,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       const result = await window.electron.removeContainer(containerId);
       if (result.success) {
         await loadProjects();
+        // Сбрасываем состояние loading после успешного удаления
+        setLoading(false);
       } else {
         alert('Failed to delete project: ' + (result.error || 'Unknown error'));
+        // Сбрасываем состояние loading даже при ошибке
+        setLoading(false);
       }
     } catch (error) {
       alert('Failed to delete project: ' + (error as Error).message);
+      // Сбрасываем состояние loading даже при ошибке
+      setLoading(false);
     } finally {
       setActionLoading(prev => ({ ...prev, [containerId]: false }));
     }

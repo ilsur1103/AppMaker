@@ -18,11 +18,13 @@ import {
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
 
-app.whenReady().then(() => {
-  createWindow();
-  // Добавлено автообновление
-  autoUpdater.checkForUpdatesAndNotify();
-});
+// Решение проблем с GPU на Windows
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+  app.commandLine.appendSwitch('disable-gpu-rasterization');
+  app.disableHardwareAcceleration();
+}
 
 
 let mainWindow: BrowserWindow | null;
@@ -35,56 +37,57 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false,
     },
-    show: false, // Скрываем окно до полной загрузки
+    backgroundColor: '#ffffff',
   });
 
-  // В режиме разработки загружаем из собранного файла
-  if (process.env.NODE_ENV === 'development') {
-    // Ждем пока Vite соберет файлы
-    setTimeout(() => {
-      mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
-    }, 2000);
-  } else {
-    // В production режиме загружаем собранный файл
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  // Отключение аппаратного ускорения для конкретного окна
+  if (process.platform === 'win32') {
+    mainWindow.setBackgroundColor('#ffffff');
   }
 
-  // Показываем окно только после полной загрузки
-  mainWindow.webContents.once('dom-ready', () => {
-    mainWindow?.show();
-  });
+  mainWindow.loadURL(
+    process.env.NODE_ENV === 'development'
+      ? 'http://localhost:5173'
+      : `file://${path.join(__dirname, '../dist/index.html')}`
+  );
+
+ 
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
-  
-  // Предотвращаем открытие новых окон
-  mainWindow.webContents.setWindowOpenHandler(() => {
-    return { action: 'deny' };
+
+  // 🔥 Критически важно: при закрытии окна — завершать приложение
+  mainWindow.on('close', (event) => {
+    if (mainWindow) {
+      event.preventDefault(); // Предотвращаем стандартное закрытие
+      mainWindow.destroy();   // Уничтожаем окно
+      mainWindow = null;
+      app.quit(); // Завершаем приложение
+    }
   });
+  
 }
 
-// Предотвращаем создание дополнительных окон
-app.on('web-contents-created', (event, contents) => {
-  contents.setWindowOpenHandler(() => {
-    return { action: 'deny' };
-  });
+
+
+app.on('ready', () => {
+  autoUpdater.checkForUpdatesAndNotify();
+  createWindow()
 });
 
-app.whenReady().then(() => {
-  createWindow();
-
-  autoUpdater.checkForUpdates();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+app.on('activate', () => {
+  if (mainWindow === null) {
+    createWindow();
+  }
 });
 
+// Завершаем приложение при закрытии всех окон
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit();
+    app.quit(); // На macOS приложения обычно остаются активными
   }
 });
 

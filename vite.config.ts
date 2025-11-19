@@ -5,14 +5,23 @@ import electron from 'vite-plugin-electron';
 export default defineConfig({
   plugins: [
     react(),
-    electron([
-      {
-        entry: 'electron/main.ts',
-      },
-      {
+    electron([{
+      entry: 'electron/main.ts',
+      vite: {
+        build: {
+          outDir: 'dist-electron',
+        },
+      }
+    },
+    {
         entry: 'electron/preload.ts',
+        vite: {
+          build: {
+            outDir: 'dist-electron',
+          },
+        },
       },
-    ]),
+  ]),
   ],
   server: {
     host: true,
