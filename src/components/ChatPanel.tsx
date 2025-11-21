@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { sendToOllama, AIResponse } from '../aiHandler';
 
 interface Message {
   id: number;
@@ -58,17 +59,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
     setMessages(prev => [...prev, thinkingMessage]);
 
     try {
-      // В реальном приложении здесь будет отправка в Ollama
-      // Пока используем симуляцию
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Симуляция ответа AI
-      const simulatedResponse = {
-        actions: [
-          { command: "CreateFile", filename: "App.js", content: "console.log('Hello from App.js');" }
-        ],
-        commands: ["npm install", "npm run build"]
-      };
+      // Отправляем запрос в Ollama
+      const aiResponse: AIResponse = await sendToOllama(inputValue);
       
       // Remove thinking message and add AI response
       setMessages(prev => {
@@ -77,7 +69,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
           ...filtered,
           {
             id: Date.now() + 2,
-            text: JSON.stringify(simulatedResponse, null, 2),
+            text: JSON.stringify(aiResponse, null, 2),
             sender: 'ai',
             timestamp: new Date(),
           }
@@ -85,7 +77,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
       });
 
       // Process AI response
-      await processAIResponse(simulatedResponse);
+      await processAIResponse(aiResponse);
 
     } catch (error) {
       setMessages(prev => {
@@ -105,7 +97,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
     }
   };
 
-  const processAIResponse = async (data: any) => {
+  const processAIResponse = async (data: AIResponse) => {
     try {
       // Process actions
       if (data.actions && Array.isArray(data.actions)) {
@@ -124,11 +116,37 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
           // Execute action based on type
           switch (action.command) {
             case 'CreateFile':
-              await window.electron.createFileInContainer(
-                containerId,
-                action.filename,
-                action.content
-              );
+              if (action.filename && action.content !== undefined) {
+                await window.electron.createFileInContainer(
+                  containerId,
+                  action.path ? `${action.path}/${action.filename}` : action.filename,
+                  action.content
+                );
+              }
+              break;
+            case 'DeleteFile':
+              if (action.filename) {
+                await window.electron.runCommandInContainer(
+                  containerId,
+                  `rm -f "${action.filename}"`
+                );
+              }
+              break;
+            case 'MoveFile':
+              if (action.sourcePath && action.targetPath) {
+                await window.electron.runCommandInContainer(
+                  containerId,
+                  `mv "${action.sourcePath}" "${action.targetPath}"`
+                );
+              }
+              break;
+            case 'CreateDirectory':
+              if (action.path) {
+                await window.electron.runCommandInContainer(
+                  containerId,
+                  `mkdir -p "${action.path}"`
+                );
+              }
               break;
             default:
               console.log('Unknown action:', action.command);
@@ -205,7 +223,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
         {messages.map((message) => (
           <div key={message.id} className={`message ${message.sender}`}>
             <div className="message-content">
-              {message.text}
+              <pre>{message.text}</pre>
             </div>
             <div className="message-time">
               {message.timestamp.toLocaleTimeString()}

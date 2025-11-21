@@ -40,7 +40,12 @@ const CodeEditorPanel: React.FC<{ containerId: string }> = ({ containerId }) => 
     try {
       const result = await window.electron.listFilesInContainer(containerId);
       if (result.success && result.files) {
-        const fileItems: FileItem[] = result.files.map((filePath: string) => ({
+        // Фильтруем файлы, чтобы показывать только те, которые находятся в корне /app
+        const rootFiles = result.files.filter(filePath => 
+          !filePath.includes('/') || filePath.split('/').length === 1
+        );
+        
+        const fileItems: FileItem[] = rootFiles.map((filePath: string) => ({
           id: filePath,
           name: filePath.split('/').pop() || filePath,
           type: filePath.endsWith('/') ? 'folder' : 'file',

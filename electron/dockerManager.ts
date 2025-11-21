@@ -2,7 +2,6 @@
 import Docker from 'dockerode';
 import fs from 'fs';
 import path from 'path';
-import { createReadStream, createWriteStream } from 'fs';
 import archiver from 'archiver';
 
 const docker = new Docker();
@@ -11,6 +10,18 @@ const WORKDIR_BASE = path.join(process.cwd(), 'workdirs');
 // Создаем базовую директорию для рабочих папок если её нет
 if (!fs.existsSync(WORKDIR_BASE)) {
   fs.mkdirSync(WORKDIR_BASE, { recursive: true });
+}
+
+// Функция для поиска свободного порта
+async function findFreePort(): Promise<number> {
+  const server = require('net').createServer();
+  return new Promise((resolve, reject) => {
+    server.listen(0, () => {
+      const port = (server.address() as any).port;
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
 }
 
 export async function createProjectContainer(projectName: string) {
@@ -71,15 +82,19 @@ export async function createProjectContainer(projectName: string) {
       console.log('Нет существующего контейнера для удаления или ошибка при проверке');
     }
 
+    // Генерируем свободный порт
+    const port = await findFreePort();
+    console.log(`Используем порт: ${port}`);
+
     const container = await docker.createContainer({
       Image: 'node:18',
       name: containerName,
       Tty: true,
       WorkingDir: '/app',
       Cmd: ['bash'],
-      ExposedPorts: { '3000/tcp': {} },
+      ExposedPorts: { [`${port}/tcp`]: {} },
       HostConfig: {
-        PortBindings: { '3000/tcp': [{ HostPort: '3000' }] }
+        PortBindings: { [`${port}/tcp`]: [{ HostPort: `${port}` }] }
       }
     });
 
@@ -98,7 +113,7 @@ export async function createProjectContainer(projectName: string) {
       console.error('Ошибка при асинхронной инициализации проекта:', error);
     });
     
-    return container;
+    return { container, port };
   } catch (error) {
     console.error('Ошибка при создании контейнера:', error);
     throw error;
@@ -541,5 +556,26 @@ export async function getContainerLogs(containerId: string, tail: number = 50) {
   } catch (error) {
     console.error('Ошибка при получении логов контейнера:', error);
     throw error;
+  }
+}
+
+// Получение порта контейнера
+export async function getContainerPort(containerId: string): Promise<number> {
+  try {
+    const container = docker.getContainer(containerId);
+    const info = await container.inspect();
+    const portBindings = info.NetworkSettings.Ports;
+    
+    // Ищем первый доступный порт
+    for (const port in portBindings) {
+      if (portBindings[port] && portBindings[port].length > 0) {
+        return parseInt(portBindings[port][0].HostPort, 10);
+      }
+    }
+    
+    return 3000; // значение по умолчанию
+  } catch (error) {
+    console.error('Ошибка при получении порта контейнера:', error);
+    return 3000;
   }
 }

@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Terminal } from 'xterm';
+import { FitAddon } from 'xterm-addon-fit';
+import 'xterm/css/xterm.css';
 
 interface ConsolePanelProps {
   containerId: string;
@@ -9,6 +12,9 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const hasAddedRunningLog = useRef(false);
   const dockerLogsInterval = useRef<NodeJS.Timeout | null>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const terminal = useRef<Terminal | null>(null);
+  const fitAddon = useRef<FitAddon | null>(null);
   let previousLine = '';
   
   // Функция для добавления логов в консоль
@@ -36,7 +42,13 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
         prefix = '[INFO] ';
     }
     
-    setLogs(prev => [...prev, `[${timestamp}] ${prefix}${message}`]);
+    const logMessage = `[${timestamp}] ${prefix}${message}`;
+    setLogs(prev => [...prev, logMessage]);
+    
+    // Добавляем в терминал
+    if (terminal.current) {
+      terminal.current.writeln(logMessage);
+    }
   };
 
   // Получаем логи Docker контейнера
@@ -99,6 +111,33 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
     // Добавляем обработчик сообщений из iframe
     window.addEventListener('message', handleIframeMessage);
     
+    // Инициализируем терминал
+    if (terminalRef.current) {
+      terminal.current = new Terminal({
+        rows: 20,
+        theme: {
+          background: '#1e1e1e',
+          foreground: '#d4d4d4'
+        }
+      });
+      
+      fitAddon.current = new FitAddon();
+      terminal.current.loadAddon(fitAddon.current);
+      
+      terminal.current.open(terminalRef.current);
+      fitAddon.current.fit();
+      
+      // Обработчик ввода команд
+      terminal.current.onData((data) => {
+        if (data === '\r') { // Enter
+          // В реальном приложении здесь будет выполнение команды
+          addLog('Command executed', 'command');
+        } else {
+          terminal.current?.write(data);
+        }
+      });
+    }
+    
     return () => {
       // Очищаем интервал при размонтировании
       if (dockerLogsInterval.current) {
@@ -107,6 +146,11 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
       
       // Удаляем обработчик сообщений
       window.removeEventListener('message', handleIframeMessage);
+      
+      // Уничтожаем терминал
+      if (terminal.current) {
+        terminal.current.dispose();
+      }
     };
   }, [containerId]);
 
@@ -120,6 +164,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
         <h2>Console</h2>
       </div>
       <div className="console-content">
+        <div ref={terminalRef} className="terminal-container" />
         <pre>
           {logs.map((log, index) => (
             <div key={index} className="log-entry">

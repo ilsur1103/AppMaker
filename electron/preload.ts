@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 // Определяем типы для нашего API
 interface ElectronAPI {
-  createProject: (projectName: string) => Promise<{ success: boolean; containerId?: string; error?: string }>;
+  createProject: (projectName: string) => Promise<{ success: boolean; containerId?: string; port?: number; error?: string }>;
   stopContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
   startContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
   removeContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
@@ -12,7 +12,8 @@ interface ElectronAPI {
   runCommandInContainer: (containerId: string, command: string) => Promise<{ success: boolean; result?: string; error?: string }>;
   listFilesInContainer: (containerId: string) => Promise<{ success: boolean; files?: string[]; error?: string }>;
   readFileInContainer: (containerId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
-  getContainerLogs: (containerId: string) => Promise<{ success: boolean; logs?: string; error?: string }>; 
+  getContainerLogs: (containerId: string) => Promise<{ success: boolean; logs?: string; error?: string }>;
+  getContainerPort: (containerId: string) => Promise<{ success: boolean; port?: number; error?: string }>;
 
   onUpdateAvailable: (callback: (info: any) => void) => void;
   onUpdateDownloaded: (callback: (info: any) => void) => void;
@@ -39,6 +40,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('read-file-in-container', containerId, filePath),
   getContainerLogs: (containerId: string) => 
     ipcRenderer.invoke('get-container-logs', containerId),
+  getContainerPort: (containerId: string) => 
+    ipcRenderer.invoke('get-container-port', containerId),
 
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_, info) => callback(info)),
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_, info) => callback(info)),

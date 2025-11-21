@@ -6,10 +6,11 @@ interface Project {
   name: string;
   status: string;
   created: string;
+  port?: number;
 }
 
 interface DashboardProps {
-  onProjectSelect: (name: string, id: string) => void;
+  onProjectSelect: (name: string, id: string, port?: number) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
@@ -24,12 +25,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
     try {
       const result = await window.electron.listContainers();
       if (result.success) {
-        const projectList = result.containers?.map((container: any) => ({
-          id: container.Id,
-          name: container.Names[0].replace('/ai-dev-', '').replace(/-\d+$/, ''),
-          status: container.State,
-          created: new Date(container.Created * 1000).toLocaleString(),
-        })) || [];
+        const projectList = await Promise.all(
+          (result.containers?.map(async (container: any) => {
+            // Получаем порт для каждого контейнера
+            const portResult = await window.electron.getContainerPort(container.Id);
+            const port = portResult.success ? portResult.port : undefined;
+            
+            return {
+              id: container.Id,
+              name: container.Names[0].replace('/ai-dev-', '').replace(/-\d+$/, ''),
+              status: container.State,
+              created: new Date(container.Created * 1000).toLocaleString(),
+              port
+            };
+          })) || []
+        );
         setProjects(projectList);
       }
     } catch (error) {
@@ -55,7 +65,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
       
       if (result.success && result.containerId) {
         console.log(`Проект создан успешно: ${result.containerId}`);
-        onProjectSelect(newProjectName, result.containerId);
+        onProjectSelect(newProjectName, result.containerId, result.port);
         await loadProjects();
       } else {
         const errorMessage = result.error || 'Unknown error';
@@ -191,6 +201,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                 <h3>{project.name}</h3>
                 <p>Status: <span className={`status ${project.status}`}>{project.status}</span></p>
                 <p>Created: {project.created}</p>
+                {project.port && (
+                  <p>Port: <a href={`http://localhost:${project.port}`} target="_blank" rel="noopener noreferrer">{project.port}</a></p>
+                )}
                 <div className="project-actions">
                   {project.status === 'running' ? (
                     <button 
@@ -211,8 +224,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onProjectSelect }) => {
                   )}
                   <button 
                     onClick={() => project.status === 'running' ? 
-                      onProjectSelect(project.name, project.id) : 
-                      handleStartProject(project.id).then(() => onProjectSelect(project.name, project.id))}
+                      onProjectSelect(project.name, project.id, project.port) : 
+                      handleStartProject(project.id).then(() => onProjectSelect(project.name, project.id, project.port))}
                     disabled={actionLoading[project.id] || project.status === 'exited'}
                     className="open-button"
                   >

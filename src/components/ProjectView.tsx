@@ -7,6 +7,7 @@ import CodeEditorPanel from './CodeEditorPanel';
 interface ProjectViewProps {
   projectName: string;
   containerId: string;
+  projectPort: number | null;
   onBack: () => void;
   viewMode: 'preview' | 'code';
   onViewModeChange: (mode: 'preview' | 'code') => void;
@@ -15,6 +16,7 @@ interface ProjectViewProps {
 const ProjectView: React.FC<ProjectViewProps> = ({ 
   projectName, 
   containerId, 
+  projectPort,
   onBack,
   viewMode,
   onViewModeChange
@@ -39,6 +41,16 @@ const ProjectView: React.FC<ProjectViewProps> = ({
               Code
             </button>
           </div>
+          {projectPort && (
+            <a 
+              href={`http://localhost:${projectPort}`} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="project-link"
+            >
+              Open in Browser (Port: {projectPort})
+            </a>
+          )}
           <button className="publish-button">Publish to GitHub</button>
         </div>
       </header>

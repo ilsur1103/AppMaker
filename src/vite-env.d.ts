@@ -4,7 +4,7 @@
 interface Window {
   electron: {
     getContainerLogs: (containerId: string) => Promise<{ success: boolean; logs?: string; containerId?: string; error?: string }>;
-    createProject: (projectName: string) => Promise<{ success: boolean; containerId?: string; error?: string }>;
+    createProject: (projectName: string) => Promise<{ success: boolean; containerId?: string; port?: number; error?: string }>;
     stopContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
     startContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
     removeContainer: (containerId: string) => Promise<{ success: boolean; error?: string }>;
@@ -14,6 +14,7 @@ interface Window {
     runCommandInContainer: (containerId: string, command: string) => Promise<{ success: boolean; result?: string; error?: string }>;
     listFilesInContainer: (containerId: string) => Promise<{ success: boolean; files?: string[]; error?: string }>;
     readFileInContainer: (containerId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
+    getContainerPort: (containerId: string) => Promise<{ success: boolean; port?: number; error?: string }>;
 
     onUpdateAvailable: (callback: (info: any) => void) => void;
     onUpdateDownloaded: (callback: (info: any) => void) => void;

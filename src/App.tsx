@@ -7,20 +7,23 @@ function App() {
   const [currentProject, setCurrentProject] = useState<string | null>(null);
   const [containerId, setContainerId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
+  const [projectPort, setProjectPort] = useState<number | null>(null);
 
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [updateProgress, setUpdateProgress] = useState<any>(null);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
 
-  const handleProjectSelect = (projectName: string, id: string) => {
+  const handleProjectSelect = (projectName: string, id: string, port?: number) => {
     setCurrentProject(projectName);
     setContainerId(id);
+    setProjectPort(port || null);
   };
 
   const handleBackToDashboard = () => {
     setCurrentProject(null);
     setContainerId(null);
     setViewMode('preview');
+    setProjectPort(null);
   };
 
   useEffect(() => {
@@ -43,6 +46,7 @@ function App() {
         <ProjectView 
           projectName={currentProject} 
           containerId={containerId} 
+          projectPort={projectPort}
           onBack={handleBackToDashboard}
           viewMode={viewMode}
           onViewModeChange={setViewMode}

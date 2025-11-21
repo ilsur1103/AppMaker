@@ -12,6 +12,7 @@ import {
   listFilesInContainer,
   readFileInContainer,
   getContainerLogs,
+  getContainerPort
 } from './dockerManager';
 
 
@@ -95,9 +96,9 @@ app.on('window-all-closed', () => {
 ipcMain.handle('create-project', async (_, projectName) => {
   try {
     console.log(`Получен запрос на создание проекта: ${projectName}`);
-    const container = await createProjectContainer(projectName);
+    const { container, port } = await createProjectContainer(projectName);
     console.log(`Проект ${projectName} успешно создан с containerId: ${container.id}`);
-    return { success: true, containerId: container.id };
+    return { success: true, containerId: container.id, port };
   } catch (error: any) {
     console.error('Ошибка при создании проекта:', error);
     return { success: false, error: error.message || 'Unknown error' };
@@ -191,6 +192,17 @@ ipcMain.handle('get-container-logs', async (_, containerId) => {
     return { success: true, logs };
   } catch (error: any) {
     console.error('Error getting container logs:', error);
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+// Получение порта контейнера
+ipcMain.handle('get-container-port', async (_, containerId) => {
+  try {
+    const port = await getContainerPort(containerId);
+    return { success: true, port };
+  } catch (error: any) {
+    console.error('Error getting container port:', error);
     return { success: false, error: error.message || 'Unknown error' };
   }
 });
