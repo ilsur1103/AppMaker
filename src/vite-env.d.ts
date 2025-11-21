@@ -15,6 +15,7 @@ interface Window {
     listFilesInContainer: (containerId: string) => Promise<{ success: boolean; files?: string[]; error?: string }>;
     readFileInContainer: (containerId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
     getContainerPort: (containerId: string) => Promise<{ success: boolean; port?: number; error?: string }>;
+    rebuildProject: (containerId: string, port: number) => Promise<{ success: boolean; error?: string }>;
 
     onUpdateAvailable: (callback: (info: any) => void) => void;
     onUpdateDownloaded: (callback: (info: any) => void) => void;

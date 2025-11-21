@@ -12,7 +12,8 @@ import {
   listFilesInContainer,
   readFileInContainer,
   getContainerLogs,
-  getContainerPort
+  getContainerPort,
+  rebuildProject
 } from './dockerManager';
 
 
@@ -203,6 +204,17 @@ ipcMain.handle('get-container-port', async (_, containerId) => {
     return { success: true, port };
   } catch (error: any) {
     console.error('Error getting container port:', error);
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+// Новый IPC handler для пересборки проекта
+ipcMain.handle('rebuild-project', async (_, containerId, port) => {
+  try {
+    await rebuildProject(containerId, port);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error rebuilding project:', error);
     return { success: false, error: error.message || 'Unknown error' };
   }
 });

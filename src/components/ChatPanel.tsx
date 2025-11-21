@@ -10,9 +10,10 @@ interface Message {
 
 interface ChatPanelProps {
   containerId: string;
+  port: number;
 }
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ containerId, port }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -124,6 +125,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
                 );
               }
               break;
+            case 'UpdateFile':
+              if (action.filename && action.content !== undefined) {
+                // UpdateFile создает файл если его нет, или обновляет если есть
+                await window.electron.createFileInContainer(
+                  containerId,
+                  action.path ? `${action.path}/${action.filename}` : action.filename,
+                  action.content
+                );
+              }
+              break;
             case 'DeleteFile':
               if (action.filename) {
                 await window.electron.runCommandInContainer(
@@ -182,23 +193,50 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId }) => {
         }
       }
 
-      // Add completion message
+      // Пересобираем проект после выполнения всех действий
       setMessages(prev => [
         ...prev,
         {
           id: Date.now() + 6,
-          text: 'All actions completed successfully!',
+          text: 'Rebuilding project with new changes...',
           sender: 'system',
           timestamp: new Date(),
         }
       ]);
+
+      try {
+        const rebuildResult = await window.electron.rebuildProject(containerId, port);
+        if (rebuildResult.success) {
+          setMessages(prev => [
+            ...prev,
+            {
+              id: Date.now() + 7,
+              text: 'Project rebuilt successfully!',
+              sender: 'system',
+              timestamp: new Date(),
+            }
+          ]);
+        } else {
+          throw new Error(rebuildResult.error || 'Unknown rebuild error');
+        }
+      } catch (rebuildError) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: Date.now() + 7,
+            text: `Failed to rebuild project: ${(rebuildError as Error).message}`,
+            sender: 'system',
+            timestamp: new Date(),
+          }
+        ]);
+      }
 
     } catch (error) {
       console.error('Error processing AI response:', error);
       setMessages(prev => [
         ...prev,
         {
-          id: Date.now() + 7,
+          id: Date.now() + 8,
           text: `Failed to process AI response: ${(error as Error).message}`,
           sender: 'system',
           timestamp: new Date(),

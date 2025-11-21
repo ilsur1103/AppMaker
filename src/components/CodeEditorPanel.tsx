@@ -6,6 +6,7 @@ interface FileItem {
   name: string;
   type: 'file' | 'folder';
   path: string;
+  children?: FileItem[];
   isExpanded?: boolean;
 }
 
@@ -35,32 +36,71 @@ const CodeEditorPanel: React.FC<{ containerId: string }> = ({ containerId }) => 
     }
   }, [selectedFile, containerId]);
 
+  const buildFileTree = (files: string[]): FileItem[] => {
+    const root: FileItem[] = [];
+    const map: Record<string, FileItem> = {};
+
+    // Создаем все элементы
+    files.forEach(filePath => {
+      const parts = filePath.split('/').filter(Boolean);
+      let currentPath = '';
+      
+      parts.forEach((part, index) => {
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        const isFile = index === parts.length - 1;
+        
+        if (!map[currentPath]) {
+          map[currentPath] = {
+            id: currentPath,
+            name: part,
+            type: isFile ? 'file' : 'folder',
+            path: currentPath,
+            children: isFile ? undefined : [],
+            isExpanded: false
+          };
+        }
+      });
+    });
+
+    // Строим иерархию
+    Object.values(map).forEach(item => {
+      const parts = item.path.split('/').filter(Boolean);
+      if (parts.length === 1) {
+        // Корневой элемент
+        root.push(item);
+      } else {
+        // Дочерний элемент
+        const parentPath = parts.slice(0, -1).join('/');
+        if (map[parentPath] && map[parentPath].children) {
+          map[parentPath].children!.push(item);
+        }
+      }
+    });
+
+    // Сортируем элементы
+    const sortItems = (items: FileItem[]): FileItem[] => {
+      return items.sort((a, b) => {
+        if (a.type === 'folder' && b.type !== 'folder') return -1;
+        if (a.type !== 'folder' && b.type === 'folder') return 1;
+        return a.name.localeCompare(b.name);
+      }).map(item => {
+        if (item.children) {
+          item.children = sortItems(item.children);
+        }
+        return item;
+      });
+    };
+
+    return sortItems(root);
+  };
+
   const loadFileTree = async () => {
     setLoading(true);
     try {
       const result = await window.electron.listFilesInContainer(containerId);
       if (result.success && result.files) {
-        // Фильтруем файлы, чтобы показывать только те, которые находятся в корне /app
-        const rootFiles = result.files.filter(filePath => 
-          !filePath.includes('/') || filePath.split('/').length === 1
-        );
-        
-        const fileItems: FileItem[] = rootFiles.map((filePath: string) => ({
-          id: filePath,
-          name: filePath.split('/').pop() || filePath,
-          type: filePath.endsWith('/') ? 'folder' : 'file',
-          path: filePath,
-          isExpanded: false
-        }));
-        
-        // Сортируем файлы и папки
-        fileItems.sort((a, b) => {
-          if (a.type === 'folder' && b.type !== 'folder') return -1;
-          if (a.type !== 'folder' && b.type === 'folder') return 1;
-          return a.name.localeCompare(b.name);
-        });
-        
-        setFileTree(fileItems);
+        const tree = buildFileTree(result.files);
+        setFileTree(tree);
       }
     } catch (error) {
       console.error('Failed to load file tree:', error);
@@ -88,9 +128,19 @@ const CodeEditorPanel: React.FC<{ containerId: string }> = ({ containerId }) => 
       setSelectedFile(file);
     } else {
       // Переключаем состояние раскрытия для папок
-      setFileTree(prev => prev.map(item => 
-        item.id === file.id ? { ...item, isExpanded: !item.isExpanded } : item
-      ));
+      const updateTree = (items: FileItem[]): FileItem[] => {
+        return items.map(item => {
+          if (item.id === file.id) {
+            return { ...item, isExpanded: !item.isExpanded };
+          }
+          if (item.children) {
+            return { ...item, children: updateTree(item.children) };
+          }
+          return item;
+        });
+      };
+      
+      setFileTree(prev => updateTree(prev));
     }
   };
 
@@ -156,26 +206,9 @@ const CodeEditorPanel: React.FC<{ containerId: string }> = ({ containerId }) => 
     };
   }, [contextMenu.visible]);
 
-  const getFileIcon = (type: string, name: string) => {
-    if (type === 'folder') {
-      return '📁';
-    }
-    const extension = name.split('.').pop()?.toLowerCase();
-    switch (extension) {
-      case 'js': return '📜';
-      case 'ts': return '📘';
-      case 'tsx': return '📘';
-      case 'json': return '📋';
-      case 'md': return '📝';
-      case 'css': return '🎨';
-      case 'html': return '🌐';
-      default: return '📄';
-    }
-  };
-
-  const renderFileTree = (items: FileItem[]) => {
+  const renderFileTree = (items: FileItem[], level = 0) => {
     return (
-      <ul className="file-tree-list">
+      <ul className="file-tree-list" style={{ paddingLeft: level > 0 ? '20px' : '0' }}>
         {items.map(item => (
           <li 
             key={item.id} 
@@ -188,15 +221,15 @@ const CodeEditorPanel: React.FC<{ containerId: string }> = ({ containerId }) => 
                 {item.type === 'folder' ? (
                   <span className="expander">{item.isExpanded ? '📂' : '📁'}</span>
                 ) : (
-                  getFileIcon(item.type, item.name)
+                  '📄'
                 )}
               </span>
               <span className="file-name" title={item.path}>{item.name}</span>
               <span className="context-menu-button">⋮</span>
             </div>
-            {item.type === 'folder' && item.isExpanded && (
+            {item.type === 'folder' && item.isExpanded && item.children && (
               <div className="folder-children">
-                {/* В реальном приложении здесь будут дочерние элементы */}
+                {renderFileTree(item.children, level + 1)}
               </div>
             )}
           </li>

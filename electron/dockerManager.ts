@@ -2,6 +2,7 @@
 import Docker from 'dockerode';
 import fs from 'fs';
 import path from 'path';
+import { createReadStream, createWriteStream } from 'fs';
 import archiver from 'archiver';
 
 const docker = new Docker();
@@ -109,7 +110,7 @@ export async function createProjectContainer(projectName: string) {
     }
     
     // Инициализируем базовый проект (асинхронно, без ожидания)
-    initializeProject(container.id).catch(error => {
+    initializeProject(container.id, port).catch(error => {
       console.error('Ошибка при асинхронной инициализации проекта:', error);
     });
     
@@ -120,60 +121,221 @@ export async function createProjectContainer(projectName: string) {
   }
 }
 
-export async function initializeProject(containerId: string) {
+export async function initializeProject(containerId: string, port: number) {
   try {
     console.log('Начало инициализации проекта...');
     
-    // Создаем базовую структуру проекта локально
+    // Создаем базовую структуру React проекта локально
     const projectWorkDir = path.join(WORKDIR_BASE, containerId);
     
     // Создаем package.json
     const packageJson = JSON.stringify({
-      "name": "ai-dev-project",
+      "name": "ai-dev-react-project",
       "version": "1.0.0",
       "description": "",
       "main": "index.js",
       "scripts": {
-        "start": "node server.js",
-        "dev": "node server.js",
-        "build": "echo Building..."
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "preview": "vite preview"
       },
       "dependencies": {
-        "express": "^4.18.0"
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
+      },
+      "devDependencies": {
+        "@types/react": "^18.2.15",
+        "@types/react-dom": "^18.2.7",
+        "@vitejs/plugin-react": "^4.0.3",
+        "typescript": "^5.0.2",
+        "vite": "^4.4.5"
       }
     }, null, 2);
     
-    // Создаем server.js
-    const serverJs = `
-const express = require('express');
-const app = express();
-const port = 3000;
-
-app.get('/', (req, res) => {
-  res.send('<h1>Hello from AI Dev Assistant!</h1><p>Your project is running successfully.</p>');
-});
-
-app.listen(port, '0.0.0.0', () => {
-  console.log(\`Server running at http://localhost:\${port}\`);
-});
-`;
+    // Создаем tsconfig.json
+    const tsconfigJson = JSON.stringify({
+      "compilerOptions": {
+        "target": "ES2020",
+        "useDefineForClassFields": true,
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "skipLibCheck": true,
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true
+      },
+      "include": ["src"],
+      "references": [{ "path": "./tsconfig.node.json" }]
+    }, null, 2);
     
+    // Создаем tsconfig.node.json
+    const tsconfigNodeJson = JSON.stringify({
+      "compilerOptions": {
+        "composite": true,
+        "skipLibCheck": true,
+        "module": "ESNext",
+        "moduleResolution": "bundler"
+      },
+      "include": ["vite.config.ts"]
+    }, null, 2);
+    
+    // Создаем vite.config.ts
+    const viteConfig = `import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    host: '0.0.0.0',
+    port: ${port}
+  }
+})`;
+    
+    // Создаем src директорию
+    const srcDir = path.join(projectWorkDir, 'src');
+    if (!fs.existsSync(srcDir)) {
+      fs.mkdirSync(srcDir, { recursive: true });
+    }
+    
+    // Создаем src/App.tsx
+    const appTsx = `import React from 'react'
+import './App.css'
+
+function App() {
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Hello from AI Dev Assistant!</h1>
+        <p>Your React app is running successfully.</p>
+      </header>
+    </div>
+  )
+}
+
+export default App`;
+    
+    // Создаем src/main.tsx
+    const mainTsx = `import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.tsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)`;
+    
+    // Создаем src/App.css
+    const appCss = `.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.App-header p {
+  font-size: 1.2rem;
+  margin-top: 10px;
+}`;
+    
+    // Создаем src/index.css
+    const indexCss = `body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}`;
+    
+    // Создаем index.html
+    const indexHtml = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Dev Assistant</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>`;
+
     // Создаем файлы локально
     await createFileInWorkDir(containerId, 'package.json', packageJson);
-    await createFileInWorkDir(containerId, 'server.js', serverJs);
+    await createFileInWorkDir(containerId, 'tsconfig.json', tsconfigJson);
+    await createFileInWorkDir(containerId, 'tsconfig.node.json', tsconfigNodeJson);
+    await createFileInWorkDir(containerId, 'vite.config.ts', viteConfig);
+    await createFileInWorkDir(containerId, 'index.html', indexHtml);
+    await createFileInWorkDir(containerId, 'src/App.tsx', appTsx);
+    await createFileInWorkDir(containerId, 'src/main.tsx', mainTsx);
+    await createFileInWorkDir(containerId, 'src/App.css', appCss);
+    await createFileInWorkDir(containerId, 'src/index.css', indexCss);
+    
+    // Синхронизируем локальную директорию с контейнером
+    await syncWorkDirToContainer(containerId);
+    
+    // Устанавливаем зависимости и запускаем Vite
+    await rebuildProject(containerId, port);
+    
+    console.log('React проект инициализирован успешно');
+  } catch (error) {
+    console.error('Ошибка при инициализации проекта:', error);
+  }
+}
+
+// Новая функция для пересборки проекта
+export async function rebuildProject(containerId: string, port: number) {
+  try {
+    console.log(`Пересборка проекта в контейнере ${containerId}`);
+    
+    // Останавливаем предыдущий процесс Vite если он есть
+    await runCommandInContainer(containerId, 'pkill -f "vite" || true');
     
     // Синхронизируем локальную директорию с контейнером
     await syncWorkDirToContainer(containerId);
     
     // Устанавливаем зависимости
+    console.log('Установка зависимостей...');
     await runCommandInContainer(containerId, 'npm install');
     
-    // Запускаем сервер
+    // Запускаем Vite сервер в фоновом режиме
+    console.log('Запуск Vite сервера...');
     await runCommandInContainer(containerId, 'npm run dev &');
     
-    console.log('Проект инициализирован успешно');
+    console.log('Проект успешно пересобран');
   } catch (error) {
-    console.error('Ошибка при инициализации проекта:', error);
+    console.error('Ошибка при пересборке проекта:', error);
+    throw error;
   }
 }
 
@@ -316,7 +478,7 @@ export async function createFileInWorkDir(containerId: string, filePath: string,
       fs.mkdirSync(dirPath, { recursive: true });
     }
     
-    // Записываем файл
+    // Записываем файл с правильной кодировкой
     fs.writeFileSync(fullFilePath, content, 'utf8');
     console.log(`Файл ${filePath} успешно создан в локальной директории`);
     
@@ -442,7 +604,7 @@ export async function runCommandInContainer(containerId: string, command: string
       
       stream.on('end', () => {
         clearTimeout(timeout);
-        const result = Buffer.concat(data).toString();
+        const result = Buffer.concat(data).toString('utf8');
         console.log(`Результат выполнения команды: ${result}`);
         resolve(result);
       });
@@ -464,7 +626,7 @@ export async function listFilesInContainer(containerId: string) {
   
   try {
     const exec = await container.exec({
-      Cmd: ['bash', '-c', 'find . -type f -o -type d | sed "s|^\\./||" | grep -v "^\\.$" | head -50'],
+      Cmd: ['bash', '-c', 'find . -type f -o -type d | sed "s|^\\./||" | grep -v "^\\.$"'],
       AttachStdout: true,
       AttachStderr: true,
       WorkingDir: '/app'
@@ -484,7 +646,7 @@ export async function listFilesInContainer(containerId: string) {
       
       stream.on('end', () => {
         clearTimeout(timeout);
-        const result = Buffer.concat(data).toString();
+        const result = Buffer.concat(data).toString('utf8');
         const files = result.trim().split('\n').filter(Boolean);
         resolve(files);
       });
@@ -525,7 +687,7 @@ export async function readFileInContainer(containerId: string, filePath: string)
       
       stream.on('end', () => {
         clearTimeout(timeout);
-        const result = Buffer.concat(data).toString();
+        const result = Buffer.concat(data).toString('utf8');
         resolve(result);
       });
       
@@ -552,7 +714,7 @@ export async function getContainerLogs(containerId: string, tail: number = 50) {
       tail: tail
     });
     
-    return logs.toString();
+    return logs.toString('utf8');
   } catch (error) {
     console.error('Ошибка при получении логов контейнера:', error);
     throw error;

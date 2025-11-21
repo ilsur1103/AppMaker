@@ -22,7 +22,7 @@ export interface AIResponse {
 export async function sendToOllama(prompt: string): Promise<AIResponse> {
   try {
     const response = await axios.post(OLLAMA_URL, {
-      model: 'qwen3-coder:30b',
+      model: 'qwen3-coder:480b-cloud',
       prompt: `You are an assistant that generates JSON responses with actions. Only respond in this format:
 {
   "messageId": 0,
@@ -32,8 +32,15 @@ export async function sendToOllama(prompt: string): Promise<AIResponse> {
   ],
   "commands": ["npm install", "npm run build"]
 }
+
+Available commands:
+- CreateFile: Create a new file with content
+- DeleteFile: Delete a file
+- MoveFile: Move/rename a file
+- CreateDirectory: Create a directory
+- UpdateFile: Update existing file content or create new file if it doesn't exist
+
 Your general goal make instructions with command for create workable react application with use typescript and vite. 
-Allow next command for Action ["CreateFile", "DeleteFile", "MoveFile", "CreateDirectory", "UpdateFile"].
 
 User request: ${prompt}`,
       stream: false,
@@ -49,7 +56,17 @@ export async function processAIActions(containerId: string, actions: AIAction[])
   for (const action of actions) {
     switch (action.command) {
       case 'CreateFile':
-        if (action.filename && action.content) {
+        if (action.filename && action.content !== undefined) {
+          await window.electron.createFileInContainer(
+            containerId,
+            action.path ? `${action.path}/${action.filename}` : action.filename,
+            action.content
+          );
+        }
+        break;
+      case 'UpdateFile':
+        if (action.filename && action.content !== undefined) {
+          // UpdateFile создает файл если его нет, или обновляет если есть
           await window.electron.createFileInContainer(
             containerId,
             action.path ? `${action.path}/${action.filename}` : action.filename,

@@ -57,12 +57,12 @@ const ProjectView: React.FC<ProjectViewProps> = ({
 
       <div className="project-content">
         <div className="left-panel">
-          <ChatPanel containerId={containerId} />
+          <ChatPanel containerId={containerId} port={projectPort || 3000} />
         </div>
         <div className="right-panel">
           {viewMode === 'preview' ? (
             <>
-              <PreviewPanel />
+              <PreviewPanel port={projectPort} containerId={containerId} />
               <ConsolePanel containerId={containerId} />
             </>
           ) : (
