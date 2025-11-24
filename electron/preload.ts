@@ -16,6 +16,8 @@ interface ElectronAPI {
   getContainerPort: (containerId: string) => Promise<{ success: boolean; port?: number; error?: string }>;
   rebuildProject: (containerId: string, port: number) => Promise<{ success: boolean; error?: string }>;
 
+  onTerminalMessage: (callback: (message: string) => void) => (() => void) | undefined;
+
   onUpdateAvailable: (callback: (info: any) => void) => void;
   onUpdateDownloaded: (callback: (info: any) => void) => void;
   onUpdateProgress: (callback: (progress: any) => void) => void;
@@ -45,6 +47,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('get-container-port', containerId),
   rebuildProject: (containerId: string, port: number) => 
     ipcRenderer.invoke('rebuild-project', containerId, port),
+
+  onTerminalMessage: (callback) => {
+    const handler = (_: any, message: string) => callback(message);
+    ipcRenderer.on('terminal-message', handler);
+    return () => ipcRenderer.removeListener('terminal-message', handler);
+  },
 
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_, info) => callback(info)),
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_, info) => callback(info)),

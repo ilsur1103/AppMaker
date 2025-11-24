@@ -5,6 +5,15 @@ import path from 'path';
 import { createReadStream, createWriteStream } from 'fs';
 import archiver from 'archiver';
 
+// Добавляем глобальную переменную для mainWindow
+let mainWindow: any = null;
+
+// Функция для установки mainWindow (вызывается из main.ts)
+export function setMainWindow(window: any) {
+  mainWindow = window;
+}
+
+
 const docker = new Docker();
 const WORKDIR_BASE = path.join(process.cwd(), 'workdirs');
 
@@ -93,9 +102,9 @@ export async function createProjectContainer(projectName: string) {
       Tty: true,
       WorkingDir: '/app',
       Cmd: ['bash'],
-      ExposedPorts: { [`${port}/tcp`]: {} },
+      ExposedPorts: { '3000/tcp': {} }, // Всегда expose порт 3000 внутри контейнера
       HostConfig: {
-        PortBindings: { [`${port}/tcp`]: [{ HostPort: `${port}` }] }
+        PortBindings: { '3000/tcp': [{ HostPort: `${port}` }] } // Маппим внутренний 3000 на внешний случайный порт
       }
     });
 
@@ -186,18 +195,19 @@ export async function initializeProject(containerId: string, port: number) {
       "include": ["vite.config.ts"]
     }, null, 2);
     
-    // Создаем vite.config.ts
+    // Создаем vite.config.ts (важно: используем фиксированный порт 3000 внутри контейнера)
+    // В функции initializeProject - исправляем vite.config.ts
     const viteConfig = `import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+    import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: '0.0.0.0',
-    port: ${port}
-  }
-})`;
+    // https://vitejs.dev/config/
+    export default defineConfig({
+      plugins: [react()],
+      server: {
+        host: '0.0.0.0',
+        port: 3000  // Всегда запускаем на порту 3000 внутри контейнера
+      }
+    })`;
     
     // Создаем src директорию
     const srcDir = path.join(projectWorkDir, 'src');
@@ -314,11 +324,11 @@ code {
 }
 
 // Новая функция для пересборки проекта
-export async function rebuildProject(containerId: string, port: number) {
+export async function rebuildProject(containerId: string, externalPort: number) {
   try {
-    console.log(`Пересборка проекта в контейнере ${containerId}`);
+    console.log(`Пересборка проекта в контейнере ${containerId} с внешним портом ${externalPort}`);
     
-    // Останавливаем предыдущий процесс Vite если он есть
+    // Останавливаем предыдущий процесс Vite если он есть (останавливаем процесс на порту 3000)
     await runCommandInContainer(containerId, 'pkill -f "vite" || true');
     
     // Синхронизируем локальную директорию с контейнером
@@ -328,8 +338,8 @@ export async function rebuildProject(containerId: string, port: number) {
     console.log('Установка зависимостей...');
     await runCommandInContainer(containerId, 'npm install');
     
-    // Запускаем Vite сервер в фоновом режиме
-    console.log('Запуск Vite сервера...');
+    // Запускаем Vite сервер в фоновом режиме на порту 3000
+    console.log('Запуск Vite сервера на порту 3000...');
     await runCommandInContainer(containerId, 'npm run dev &');
     
     console.log('Проект успешно пересобран');
@@ -605,6 +615,8 @@ export async function runCommandInContainer(containerId: string, command: string
       stream.on('end', () => {
         clearTimeout(timeout);
         const result = Buffer.concat(data).toString('utf8');
+        // Отправляем сообщение о завершении команды
+        mainWindow?.webContents.send('terminal-message', result);
         console.log(`Результат выполнения команды: ${result}`);
         resolve(result);
       });

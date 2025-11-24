@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { sendToOllama, AIResponse } from '../aiHandler';
+import { sendToOllama, processAIActions, AIResponse, AIAction } from '../aiHandler';
 
 interface Message {
   id: number;
@@ -184,7 +184,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ containerId, port }) => {
               ...prev,
               {
                 id: Date.now() + 5,
-                text: `Command output:\n${result.result}`,
+                text: `Command executed successfully`,
                 sender: 'system',
                 timestamp: new Date(),
               }

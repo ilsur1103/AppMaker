@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
@@ -15,7 +15,14 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
   const commandBuffer = useRef<string>('');
   let previousLine = '';
 
-  // Получаем логи Docker контейнера
+  // Новый метод для добавления сообщений в терминал
+  const writeToTerminal = (message: string) => {
+    if (terminal.current) {
+      terminal.current.writeln(message);
+    }
+  };
+
+  // Получаем логи Docker контейнера и отображаем их в терминале
   const fetchDockerLogs = async () => {
     try {
       const result = await window.electron.getContainerLogs(containerId);
@@ -25,46 +32,42 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
         logLines.forEach((line: string) => {
           if (previousLine === line) return;
           previousLine = line;
-          if (terminal.current) {
-            terminal.current.writeln(`[DOCKER] ${line}`);
-          }
+          writeToTerminal(`[DOCKER] ${line}`);
         });
       }
     } catch (error) {
-      if (terminal.current) {
-        terminal.current.writeln(`[ERROR] Error fetching Docker logs: ${(error as Error).message}`);
-      }
+      writeToTerminal(`[ERROR] Error fetching Docker logs: ${(error as Error).message}`);
     }
   };
 
   // Обработчик сообщений из iframe
   const handleIframeMessage = (event: MessageEvent) => {
     try {
-      // Проверяем, что сообщение пришло от нашего iframe
       if (event.origin === 'http://localhost:3000' || event.origin === window.location.origin) {
         const data = event.data;
         
-        // Добавляем логи из iframe
         if (data.type === 'console-log') {
-          if (terminal.current) {
-            terminal.current.writeln(`[IFRAME] Console: ${data.message}`);
-          }
+          writeToTerminal(`[IFRAME] Console: ${data.message}`);
         } else if (data.type === 'error') {
-          if (terminal.current) {
-            terminal.current.writeln(`[IFRAME] Error: ${data.message}`);
-          }
+          writeToTerminal(`[IFRAME] Error: ${data.message}`);
         } else if (data.type === 'info') {
-          if (terminal.current) {
-            terminal.current.writeln(`[IFRAME] ${data.message}`);
-          }
+          writeToTerminal(`[IFRAME] ${data.message}`);
         }
       }
     } catch (error) {
-      console.error('Error processing iframe message:', error);
+      writeToTerminal(`[ERROR] Error processing iframe message: ${(error as Error).message}`);
     }
   };
 
+  // Новый IPC listener для получения сообщений из main process
+  const handleTerminalMessage = (_: any, message: string) => {
+    writeToTerminal(message);
+  };
+
   useEffect(() => {
+    // Добавляем IPC listener
+    const removeListener = (window.electron as any).onTerminalMessage?.(handleTerminalMessage);
+    
     // Инициализируем терминал
     if (terminalRef.current) {
       terminal.current = new Terminal({
@@ -83,23 +86,23 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
       fitAddon.current.fit();
       
       // Добавляем начальные логи
-      terminal.current.writeln('[INFO] Container started');
-      terminal.current.writeln('[INFO] Node.js v18.17.0');
+      writeToTerminal('[INFO] Container started');
+      writeToTerminal('[INFO] Node.js v18.17.0');
       
       // Обработчик ввода команд
       terminal.current.onData(async (data) => {
         if (data === '\r') { // Enter
           const command = commandBuffer.current.trim();
           if (command) {
-            terminal.current?.writeln(`$ ${command}`);
+            writeToTerminal(`$ ${command}`);
             
             try {
               const result = await window.electron.runCommandInContainer(containerId, command);
               if (result.success && result.result) {
-                terminal.current?.writeln(result.result);
+                writeToTerminal(result.result);
               }
             } catch (error) {
-              terminal.current?.writeln(`[ERROR] ${(error as Error).message}`);
+              writeToTerminal(`[ERROR] ${(error as Error).message}`);
             }
           }
           commandBuffer.current = '';
@@ -121,19 +124,24 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({ containerId }) => {
     // Устанавливаем интервал для периодического получения логов
     dockerLogsInterval.current = setInterval(() => {
       fetchDockerLogs();
-    }, 5000); // Каждые 5 секунд
+    }, 5000);
     
     // Добавляем обработчик сообщений из iframe
     window.addEventListener('message', handleIframeMessage);
     
     return () => {
-      // Очищаем интервал при размонтировании
+      // Очищаем интервал
       if (dockerLogsInterval.current) {
         clearInterval(dockerLogsInterval.current);
       }
       
       // Удаляем обработчик сообщений
       window.removeEventListener('message', handleIframeMessage);
+      
+      // Удаляем IPC listener
+      if (removeListener) {
+        removeListener();
+      }
       
       // Уничтожаем терминал
       if (terminal.current) {

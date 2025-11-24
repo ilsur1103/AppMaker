@@ -13,7 +13,8 @@ import {
   readFileInContainer,
   getContainerLogs,
   getContainerPort,
-  rebuildProject
+  rebuildProject,
+  setMainWindow
 } from './dockerManager';
 
 
@@ -48,6 +49,8 @@ function createWindow() {
   if (process.platform === 'win32') {
     mainWindow.setBackgroundColor('#ffffff');
   }
+
+  setMainWindow(mainWindow);
 
   mainWindow.loadURL(
     process.env.NODE_ENV === 'development'
@@ -158,10 +161,17 @@ ipcMain.handle('create-file-in-container', async (_, containerId, filePath, cont
 
 ipcMain.handle('run-command-in-container', async (_, containerId, command) => {
   try {
+    // Отправляем сообщение о начале выполнения команды
+    mainWindow?.webContents.send('terminal-message', `[INFO] Executing command: ${command}`);
+    
     const result = await runCommandInContainer(containerId, command);
+    
+    // Отправляем сообщение о завершении команды
+    mainWindow?.webContents.send('terminal-message', `[INFO] Command completed`);
+    
     return { success: true, result };
   } catch (error: any) {
-    console.error('Error running command in container:', error);
+    mainWindow?.webContents.send('terminal-message', `[ERROR] ${error.message || 'Unknown error'}`);
     return { success: false, error: error.message || 'Unknown error' };
   }
 });
@@ -212,6 +222,8 @@ ipcMain.handle('get-container-port', async (_, containerId) => {
 ipcMain.handle('rebuild-project', async (_, containerId, port) => {
   try {
     await rebuildProject(containerId, port);
+    // Отправляем сообщение о завершении команды
+    mainWindow?.webContents.send('terminal-message', `[INFO] Rebuild completed`);
     return { success: true };
   } catch (error: any) {
     console.error('Error rebuilding project:', error);
@@ -241,4 +253,15 @@ autoUpdater.on('error', (error) => {
 ipcMain.handle('install-update', async () => {
   autoUpdater.quitAndInstall();
   return { success: true };
+});
+
+
+// Добавляем новый IPC handler для отправки сообщений в терминал
+ipcMain.handle('send-terminal-message', async (_, message: string) => {
+  try {
+    mainWindow?.webContents.send('terminal-message', message);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
 });

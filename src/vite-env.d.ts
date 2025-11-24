@@ -22,5 +22,7 @@ interface Window {
     onUpdateProgress: (callback: (progress: any) => void) => void;
     onUpdateError: (callback: (error: string) => void) => void;
     installUpdate: () => Promise<{ success: boolean }>;
+
+    onTerminalMessage?: (callback: (message: string) => void) => (() => void) | undefined;
   };
 }

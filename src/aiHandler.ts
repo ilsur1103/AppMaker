@@ -33,6 +33,8 @@ export async function sendToOllama(prompt: string): Promise<AIResponse> {
   "commands": ["npm install", "npm run build"]
 }
 
+Rules: in vite.config.ts server port should be always 3000
+
 Available commands:
 - CreateFile: Create a new file with content
 - DeleteFile: Delete a file

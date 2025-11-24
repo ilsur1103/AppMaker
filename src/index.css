@@ -398,7 +398,7 @@ body {
 }
 
 .panel-header {
-  padding: 1rem;
+  padding: 8px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -444,8 +444,7 @@ body {
 
 .console-content {
   flex: 1;
-  padding: 1rem;
-  overflow-y: auto;
+  padding: 0;
 }
 
 .console-content pre {

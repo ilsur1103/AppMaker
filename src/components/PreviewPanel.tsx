@@ -62,6 +62,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ port, containerId }) => {
     if (!port) return;
     
     try {
+      // Проверяем доступность приложения на внешнем порту
       const response = await fetch(`http://localhost:${port}/`);
       if (response.ok) {
         setIsLoading(false);
